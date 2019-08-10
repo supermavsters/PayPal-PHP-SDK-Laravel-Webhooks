@@ -3,12 +3,13 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-    <title>Laravel</title>
+    <title>Paypal</title>
 
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,600" rel="stylesheet">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 
     <!-- Styles -->
     <style>
@@ -67,31 +68,91 @@
 </head>
 
 <body>
-    <div class="flex-center position-ref full-height">
-        @if ($message = Session::get('success'))
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm mx-3">
 
-        <p>{!! $message !!}</p>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">id</th>
+                            <th scope="col">url</th>
+                            <th scope="col">event_types</th>
+                            <th scope="col">links</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($webhooks as $key => $webhook_single)
+                        @foreach($webhook_single as $key_webhook => $webhook)
+                        <tr>
+                            <td>{{$webhook['id']}}</td>
+                            <td>{{$webhook['url']}}</td>
+                            <td>
+                                @foreach($webhook['event_types'] as $value)
+                                <p>
+                                    {{$value['name']}}
+                                    {{$value['description']}}
+                                    {{$value['status']}}
+                                </p>
+                                @endforeach
+                            </td>
+                            <td>
+                                @foreach($webhook['links'] as $value)
+                                <p>
+                                    {{$value['href']}}
+                                    {{$value['rel']}}
+                                    {{$value['method']}}
+                                </p>
+                                @endforeach
+                            </td>
+                        </tr>
+                        @endforeach
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        <?php Session::forget('success'); ?>
-        @endif
+        <div class="row">
+            <div class="col-sm">
+                <div class="card">
+                    <div class="card-body">
+                        @if ($message = Session::get('success'))
 
-        @if ($message = Session::get('error'))
+                        <p>{!! $message !!}</p>
 
-        <p>{!! $message !!}</p>
+                        <?php Session::forget('success'); ?>
+                        @endif
 
-        <?php Session::forget('error'); ?>
-        @endif
+                        @if ($message = Session::get('error'))
 
-        <form class="w3-container w3-display-middle w3-card-4 w3-padding-16" method="POST" id="payment-form" action="{!! URL::to('paypal') !!}">
-            <div class="w3-container w3-teal w3-padding-16">Paywith Paypal</div>
-            {{ csrf_field() }}
-            <h2 class="w3-text-blue">Payment Form</h2>
-            <p>Demo PayPal form - Integrating paypal in laravel</p>
-            <label class="w3-text-blue"><b>Enter Amount</b></label>
-            <input class="w3-input w3-border" id="amount" type="text" name="amount"></p>
-            <button class="w3-btn w3-blue">Pay with PayPal</button>
-        </form>
+                        <p>{!! $message !!}</p>
+
+                        <?php Session::forget('error'); ?>
+                        @endif
+
+                        <form class="w3-container w3-display-middle w3-card-4 w3-padding-16" method="POST" id="payment-form" action="{{route('webhooks.create')}}">
+                            <div class="w3-container w3-teal w3-padding-16">Paywith Paypal</div>
+                            {{ csrf_field() }}
+                            <input id="webhookEventTypes" name="webhookEventTypes" value="PAYMENT.AUTHORIZATION.CREATED" />
+                            <input id="urlPostWebHook" name="urlPostWebHook" type="text" value="https://public.test/webhooks/validate/WebHook">
+                            <input id="amount" type="text" name="amount">
+                            <button>Pay with PayPal</button>
+
+
+                        </form>
+                        <!-- <hr /> -->
+                        <a href="{{ url('subscribe/paypal') }}">Payment</a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 </body>
 
 </html>
