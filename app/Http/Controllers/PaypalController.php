@@ -255,4 +255,29 @@ class PayPalController extends BaseController
     {
         return $this->webhooks_id;
     }
+
+    function PaypalError($e)
+    {
+
+        $err = "";
+
+        do {
+            if (is_a($e, "PayPal\Exception\PayPalConnectionException")) {
+                $data = json_decode($e->getData(), true);
+                $err .= $data['name'] . " - " . $data['message'] . "<br>";
+                if (isset($data['details'])) {
+                    $err .= "<ul>";
+                    foreach ($data['details'] as $details) {
+                        $err .= "<li>" . $details['field'] . ": " . $details['issue'] . "</li>";
+                    }
+                    $err .= "</ul>";
+                }
+            } else {
+                //some other type of error
+                $err .= sprintf("%s:%d %s (%d) [%s]\n", $e->getFile(), $e->getLine(), $e->getMessage(), $e->getCode(), get_class($e));
+            }
+        } while ($e = $e->getPrevious());
+
+        return $err;
+    }
 }

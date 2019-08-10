@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Validator;
+use Illuminate\Http\Request;
+use \PayPal\Api\WebhookEvent;
 use PhpParser\Node\Stmt\Return_;
 use \PayPal\Api\VerifyWebhookSignature;
-use \PayPal\Api\WebhookEvent;
+use \PayPal\Api\Webhook;
 
 class WebHookPaypal extends PayPalController
 {
@@ -130,67 +131,147 @@ class WebHookPaypal extends PayPalController
 
     public function updateWebHook(Request $request, $webhookId)
     {
-        $rules = [
-            'url' => 'required',
-            'event_types' => 'required',
-        ];
-
-        $credentials = $request->only(
-            'url',
-            'event_types'
-        );
-
-        $validator = Validator::make($credentials, $rules);
-
-        if ($validator->fails()) {
-            return parent::sendError('Incorrect Data', $validator->errors()->all(), 400);
-        }
+        // Create a stream
         if (isset($webhookId)) {
-            // Find the Web Hook
-            $webhook = self::getSpecificWebHookByID($webhookId, false);
-            // Check the webhook
-            if (isset($webhook) && $webhook != null) {
-                try {
-
-
-                    // New URL
-                    $patch = new \PayPal\Api\Patch();
-                    $patch->setOp("replace")
-                        ->setPath("/url")
-                        ->setValue($request->url);
-
-                    // New Events
-                    $webhookEventTypesTemp = [];
-                    foreach ($request->event_types as $value) {
-                        $webhookEventTypesTemp["name"] = $value;
-                    }
-
-                    $WorkingArray = json_decode(json_encode($webhookEventTypesTemp), true);
-
-                    $patch2 = new \PayPal\Api\Patch();
-                    $patch2->setOp("replace")
-                        ->setPath("/event_types")
-                        ->setValue($WorkingArray);
-
-                    // Merge Elements
-                    $patchRequest = new \PayPal\Api\PatchRequest();
-                    $patchRequest->addPatch($patch)->addPatch($patch2);
-
-                    // ### Set Webhook
-                    $output = $webhook->update($patchRequest, parent::getApiContext());
-                    // Show values
-                    return parent::sendResponse($output);
-                } catch (Exception $ex) {
-                    return parent::sendErrorMain('There was an error get or delete the webhooks', [$ex->getMessage()]);
-                }
-                return parent::sendResponse('The Webhook deleted', 'The webhook has been deleted', true);
+            if (!$request->getContent()) {
+                return parent::sendError('Incorrect Data', ['No exist Content'], 400);
             }
-        } else {
-            return parent::sendErrorMain('No exist the webhooks');
+            // // Get Data Diferentes ways to get the object (Webhook)
+            // $patchRequest = self::getPatchRequest($request->getContent());
+            // // ### Get Webhook #1
+            // $url = 'http://public.test/api/webhooks/show/' . $webhookId;
+            // $getDataWebHook = self::callGetWebhook($url);
+            // // ### Get Webhook #2
+            // // $webhook =  \PayPal\Api\Webhook::get($webhookId, parent::getApiContext());
+            // // ### Get Webhook #3
+            // // $webhook = new \PayPal\Api\Webhook($jsonDataWebHook);
+            // // ### Get Webhook #4
+            // $webhook = new Webhook();
+            // $webhook = $webhook->fromJson($getDataWebHook);
+
+            // // Set Data
+            // $webhook = self::setData($webhook, $webhookId, $patchRequest);
+            // For Sample Purposes Only.
+            try {
+                /** @var Array $headers */
+                $headers = getallheaders();
+
+                $authorization = ($headers['Authorization']);
+                // $authorization = "Bearer A21AAGFc9ljkO1Cz_FDZKzaeZ-ChtvHA_xXp-0mRt9mHNg3w6IlAeTSZoVpbPFrOAApqbT60QX5XvV9JAoT4PIoMXuxZZS6Vg";
+
+                $url = 'https://api.sandbox.paypal.com/v1/notifications/webhooks/' . $webhookId;
+                $post = self::makeJSON($request->getContent()); // Array of data with a trigger
+                $output = self::jwt_request($url, $authorization, $post); // Send or retrieve data
+
+                // $output = $webhook->update($patchRequest, parent::getApiContext()); //, 'http://public.test/api/webhooks/' . $webhookId);
+                // Show values
+                // return parent::sendResponse($output);
+                return response()->json($output, 200);
+            } catch (Exception $ex) {
+                return parent::sendErrorMain('There was an error get or update the webhooks', self::PaypalError($ex));
+            }
+            return parent::sendResponse('The Webhook has been update', 'The webhook has been update', true);
         }
     }
 
+    function jwt_request($url, $token, $post)
+    {
 
+        header('Content-Type: application/json'); // Specify the type of data
+        $ch = curl_init($url); // Initialise cURL
+        $post = json_encode($post); // Encode the data array into a JSON string
+        $authorization = "Authorization: " . $token; // Prepare the authorisation token
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', $authorization)); // Inject the token into the header
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        // curl_setopt($ch, CURLOPT_POST, 1); // Specify the request method as POST
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $post); // Set the posted fields
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1); // This will follow any redirects
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        $result = curl_exec($ch); // Execute the cURL statement
+        curl_close($ch); // Close the cURL connection
+
+        return json_decode($result);
+    }
+
+
+
+    private function makeJSON($request)
+    {
+        // Remove Spaces
+        $string = trim(preg_replace('/\s\s+/', '', $request));
+        // Conver Object
+        $WorkingArray = json_decode(json_encode($string), true);
+        // Flag Object JSON
+        $jsonData = (json_decode($WorkingArray, true));
+        return $jsonData;
+    }
+
+
+    private function getPatchRequest($request)
+    {
+
+        $jsonData = self::makeJSON($request);
+
+        // Find the Web Hook
+        // New URL
+        $patch = new \PayPal\Api\Patch();
+        $patch->setOp($jsonData[0]['op']) //"replace")
+            ->setPath($jsonData[0]['path']) //"/url")
+            ->setValue($jsonData[0]['value']);
+        // New Events
+        $webhookEventTypesTemp = [];
+        foreach ($jsonData[1]['value'] as $key => $value) {
+            $webhookEventTypesTemp["name"] = $value['name'];
+        }
+        $WorkingArray = json_decode(json_encode($webhookEventTypesTemp), true);
+
+        $patch2 = new \PayPal\Api\Patch();
+        $patch2->setOp($jsonData[1]['op']) //"replace")
+            ->setPath($jsonData[1]['path']) //"/url")
+            ->setValue($WorkingArray);
+
+        $patchRequest = new \PayPal\Api\PatchRequest();
+        $patchRequest->addPatch($patch)->addPatch($patch2);
+        return $patchRequest;
+    }
+
+
+    private function callGetWebhook($url)
+    {
+        $file = file_get_contents($url);
+        // Remove Spaces
+        $string = trim(preg_replace('/\s\s+/', '', $file));
+        // Conver Object
+        $WorkingArray = json_decode(json_encode($string), true);
+        // Flag Object JSON
+        $jsonDataWebHook = json_encode(json_decode($WorkingArray, true));
+        return $jsonDataWebHook;
+    }
+
+    private function setData($tempWebHook, $webhookId, $patchRequest)
+    {
+        $tempWebHook->setId($webhookId);
+        // dd($patchRequest);
+        $tempWebHook->setUrl($patchRequest[0]['value']);
+        $webhookEventTypesTemp = [];
+        foreach ($patchRequest[1]['value'] as $key => $value) {
+            $webhookEventTypesTemp[] = new \PayPal\Api\WebhookEventType('{"name":"' . $value['name'] . '"}');
+        }
+        $tempWebHook->setEventTypes($webhookEventTypesTemp);
+        return $tempWebHook;
+    }
+
+
+    function show(Request $request, $webhookID)
+    {
+        $_GET['webhookID'] = $webhookID;
+        try {
+            $output = \PayPal\Api\Webhook::get($webhookID, parent::getApiContext());
+            return $output;
+        } catch (Exception $ex) {
+            return parent::sendErrorMain('There was an error get the data', [$ex->getMessage()]);
+        }
+    }
     function showWebHook($webhookId)
     {
         try {
